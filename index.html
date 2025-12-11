@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>Emoji Treasure Chest Event</title>
     <style>
-        /* 이모지 폰트 통일 */
         @import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
 
         body {
@@ -32,11 +31,10 @@
         /* 보물상자 */
         #chest-container {
             position: absolute;
-            bottom: 2%;
+            bottom: 5%;
             left: 50%;
             transform: translateX(-50%);
-            width: 25%;
-            /* [중요] 레이어 중간 단계 */
+            width: 30%; /* 상자 크기 살짝 키움 */
             z-index: 10;
             filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.4));
         }
@@ -46,80 +44,65 @@
             display: block;
         }
 
-        /* 떨어지는 아이템 */
-        .falling-item {
+        /* 튀어오르는 왕 하트 스타일 */
+        .pop-out-heart {
             position: absolute;
-            font-size: 3.5rem;
-            top: -150px;
-            /* [수정] 상자(10)보다 높게 설정하여 상자 위로 떨어지게 함 */
-            z-index: 15;
-            will-change: transform, top;
-            animation-timing-function: linear;
-            animation-fill-mode: forwards;
-            filter: drop-shadow(0 4px 4px rgba(0,0,0,0.5));
-        }
-
-        /* [수정] 드라마틱한 펑 효과 강화 */
-        .poof {
-            position: absolute;
-            /* [수정] 폰트 사이즈 대폭 확대 */
-            font-size: 8rem; 
-            transform: translate(-50%, -50%);
+            left: 50%; 
+            bottom: 20%; /* 상자 내부에서 시작 */
+            font-size: 15rem; /* 영상처럼 매우 크게 */
+            z-index: 5; /* 상자(10)보다는 뒤, 배경보다는 앞 -> 상자 안에서 나오는 느낌 */
+            
+            /* 애니메이션 설정 */
+            animation: popOutMove 2.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            
+            /* 이쁜 하트를 위한 필터 */
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)) brightness(1.2);
+            will-change: transform, opacity;
             pointer-events: none;
-            /* [수정] 그 어떤 것보다 최상단에 위치 */
-            z-index: 100;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            animation: poofDramatic 0.6s ease-out forwards;
         }
 
-        @keyframes poofDramatic {
-            0% { 
-                opacity: 1; 
-                transform: translate(-50%, -50%) scale(0.5); 
-                content: '✨'; 
-                filter: brightness(5); /* 눈부시게 시작 */
-            }
-            20% {
-                /* 쾅! 하는 타이밍 */
-                transform: translate(-50%, -50%) scale(1.8); 
-                content: '💥';
-                filter: brightness(1);
-                /* 빛 번짐 효과 추가 */
-                text-shadow: 0 0 50px rgba(255, 165, 0, 0.8), 0 0 20px rgba(255, 255, 0, 0.8);
-            }
-            100% { 
-                opacity: 0; 
-                transform: translate(-50%, -50%) scale(2.5); 
-                filter: blur(4px);
-            }
-        }
-
-        /* 쌓이는 하트 */
-        .heart-stack {
-            position: absolute;
-            font-size: 2.5rem;
-            /* [수정] 상자(10)보다는 위, 떨어지는 아이템(15)보다는 아래 -> 자연스럽게 쌓이는 느낌 */
-            z-index: 12;
-            transform-origin: center center;
-            /* text-shadow로 약간의 입체감 */
-            text-shadow: 0 2px 10px rgba(255, 0, 0, 0.4);
-        }
-
+        /* 하트 내부 (두근거림 효과용) */
         .heart-inner {
             display: block;
-            animation: heartbeat 1.2s infinite ease-in-out;
+            animation: heartBeatInner 1.2s infinite ease-in-out;
         }
 
-        @keyframes heartbeat {
+        /* 1. 튀어오르는 전체 움직임 */
+        @keyframes popOutMove {
+            0% {
+                transform: translate(-50%, 50%) scale(0.1);
+                opacity: 0;
+            }
+            15% {
+                opacity: 1;
+                /* 위로 솟구치며 커짐 */
+                transform: translate(-50%, -60%) scale(1.2); 
+            }
+            25% {
+                /* 살짝 내려오며 안착 (반동) */
+                transform: translate(-50%, -40%) scale(1.0); 
+            }
+            80% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.0);
+            }
+            100% {
+                opacity: 0;
+                /* 서서히 위로 사라짐 */
+                transform: translate(-50%, -150%) scale(1.1); 
+            }
+        }
+
+        /* 2. 하트 자체의 두근거림 */
+        @keyframes heartBeatInner {
             0% { transform: scale(1); }
-            14% { transform: scale(1.3); } 
+            14% { transform: scale(1.15); } 
             28% { transform: scale(1); }
-            42% { transform: scale(1.3); } 
+            42% { transform: scale(1.15); } 
             70% { transform: scale(1); }
             100% { transform: scale(1); }
         }
+
     </style>
 </head>
 <body>
@@ -127,6 +110,7 @@
     <div id="game-container">
         <div id="chest-container">
             <img src="./chest_3d.png" alt="Treasure Chest" id="chest-img">
+            <div id="spawn-point"></div>
         </div>
     </div>
 
@@ -137,16 +121,8 @@
     <script>
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        const container = document.getElementById('game-container');
         const chestContainer = document.getElementById('chest-container');
 
-        const randomEmojis = [
-            "💎", "💍", "👑", "💰", "🎁", "🧸", "🔑", "🔮", "📷", "📱",
-            "💻", "⌚", "🕶️", "🎒", "👠", "🧢", "🎸", "🎨", "🍔", "🍕",
-            "🍩", "🍦", "🍭", "🚗", "✈️", "🚀", "🛸", "🎻", "🎺", "🥁"
-        ];
-
-        const heartPile = []; 
         let inputListener = null;
         const startTime = Date.now();
 
@@ -155,108 +131,35 @@
             inputListener = inputRef.on('child_added', (snapshot) => {
                 const data = snapshot.val();
                 if (data.timestamp && data.timestamp > startTime) {
-                    spawnItem();
+                    // 입력이 들어오면 하트 팝업 실행
+                    spawnBigHeart();
                 }
             });
         }
 
         startListening();
 
-        function spawnItem() {
-            const item = document.createElement('div');
-            item.classList.add('falling-item');
-            item.innerText = randomEmojis[Math.floor(Math.random() * randomEmojis.length)];
-            
-            const containerRect = container.getBoundingClientRect();
-            const chestRect = chestContainer.getBoundingClientRect();
-
-            const chestLeftPercent = ((chestRect.left - containerRect.left) / containerRect.width) * 100;
-            const chestRightPercent = ((chestRect.right - containerRect.left) / containerRect.width) * 100;
-            
-            const padding = 2; 
-            const randomLeft = (chestLeftPercent + padding) + Math.random() * (chestRightPercent - chestLeftPercent - padding * 2);
-            
-            item.style.left = `${randomLeft}%`;
-            
-            // 목표 지점: 상자 높이의 60% 지점 (너무 깊이 안 들어가게)
-            const targetTop = chestRect.top - containerRect.top + (chestRect.height * 0.6);
-
-            const duration = 5 + Math.random() * 1; // 5~6초
-            item.style.animationName = `fall-${Date.now()}`;
-            item.style.animationDuration = `${duration}s`;
-
-            const style = document.createElement('style');
-            style.innerHTML = `
-                @keyframes ${item.style.animationName} {
-                    from { top: -10%; transform: rotate(0deg); }
-                    to { top: ${targetTop}px; transform: rotate(${Math.random() * 360}deg); }
-                }
-            `;
-            item.appendChild(style);
-            container.appendChild(item);
-
-            item.addEventListener('animationend', () => {
-                triggerPoof(item);
-            });
-        }
-
-        function triggerPoof(item) {
-            const rect = item.getBoundingClientRect();
-            const containerRect = container.getBoundingClientRect();
-            
-            const left = rect.left - containerRect.left + (rect.width / 2);
-            const top = rect.top - containerRect.top + (rect.height / 2);
-
-            item.remove(); 
-
-            // 1. 펑 효과 생성
-            const poof = document.createElement('div');
-            poof.classList.add('poof');
-            poof.innerText = "✨"; // CSS 애니메이션에서 content를 바꾸지만 초기값 설정
-            poof.style.left = `${left}px`;
-            poof.style.top = `${top}px`;
-            container.appendChild(poof);
-            setTimeout(() => poof.remove(), 600);
-
-            // 2. 하트 쌓기
-            addHeartToChest(left, top);
-        }
-
-        function addHeartToChest(targetX, targetY) {
+        function spawnBigHeart() {
+            // 1. 하트 감싸는 컨테이너 생성
             const heartWrapper = document.createElement('div');
-            heartWrapper.classList.add('heart-stack');
+            heartWrapper.classList.add('pop-out-heart');
             
+            // 2. 하트 내부 (두근거림용)
             const heartInner = document.createElement('span');
             heartInner.classList.add('heart-inner');
-            heartInner.innerText = "❤️";
+            heartInner.innerText = "❤️"; // 영상처럼 빨간 하트 고정 (원하시면 입력된 이모지로 변경 가능)
+            
             heartWrapper.appendChild(heartInner);
-            
-            const randomOffsetX = (Math.random() - 0.5) * 40; 
-            const randomOffsetY = (Math.random() * 20); // 아래로 조금만 퍼지게
+            chestContainer.appendChild(heartWrapper);
 
-            heartWrapper.style.left = `${targetX + randomOffsetX}px`;
-            heartWrapper.style.top = `${targetY + randomOffsetY}px`;
-            
-            const randomRotation = Math.random() * 60 - 30;
-            
-            // 등장 애니메이션 (JS Transition)
-            heartWrapper.style.transform = `translate(-50%, -50%) rotate(${randomRotation}deg) scale(0)`;
-            heartWrapper.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            // 3. 약간의 랜덤 각도 추가 (너무 정직하게 위로만 가면 재미없으니 -15도 ~ 15도 기울기)
+            const randomRotate = (Math.random() * 30) - 15;
+            heartInner.style.transform = `rotate(${randomRotate}deg)`;
 
-            container.appendChild(heartWrapper);
-            
-            requestAnimationFrame(() => {
-                heartWrapper.style.transform = `translate(-50%, -50%) rotate(${randomRotation}deg) scale(1)`;
+            // 4. 애니메이션 종료 후 삭제 (메모리 관리)
+            heartWrapper.addEventListener('animationend', () => {
+                heartWrapper.remove();
             });
-
-            heartPile.push(heartWrapper);
-
-            if (heartPile.length > 150) {
-                const oldHeart = heartPile.shift();
-                oldHeart.style.transition = 'opacity 0.5s';
-                oldHeart.style.opacity = '0';
-                setTimeout(() => oldHeart.remove(), 500);
-            }
         }
     </script>
 </body>
