@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>High Performance Emoji Chest</title>
+    <title>High Performance Emoji Chest (Firebase Ready)</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
 
@@ -138,7 +138,7 @@
     <div id="test-controls">
         <button id="start-test-btn" class="btn">⚡ 1분간 1000개 발사 시뮬레이션</button>
         <button id="clear-btn" class="btn">🗑️ 모두 지우기</button>
-        <span id="counter" style="color: white; padding: 10px; background: rgba(0,0,0,0.5); border-radius: 5px;">0/1000</span>
+        <span id="counter" style="color: white; padding: 10px; background: rgba(0,0,0,0.5); border-radius: 5px;">0/800</span>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -146,41 +146,78 @@
     <script src="./config.js"></script>
 
     <script>
-        // Firebase 설정 및 초기화 (이전 코드와 동일)
-        if (typeof firebaseConfig === 'undefined') {
-            console.warn("config.js가 로드되지 않았습니다. 테스트 모드로 동작합니다.");
-            var firebaseConfig = { apiKey: "test", projectId: "test" };
-        }
-        
-        try {
-            firebase.initializeApp(firebaseConfig);
-        } catch(e) { console.log("Firebase Init Skip (Test Mode)"); }
-
-        let db;
-        try { db = firebase.database(); } catch(e) {}
-
+        // --- 전역 변수 설정 및 초기화 ---
         const pileLayer = document.getElementById('pile-layer');
         const counterElement = document.getElementById('counter');
         const startTestBtn = document.getElementById('start-test-btn');
         const clearBtn = document.getElementById('clear-btn');
         
-        const loadTime = Date.now();
-        const oneHourAgo = loadTime - (60 * 60 * 1000);
-        
         const MAX_ELEMENTS = 800;
         let activeElements = [];
 
+        // --- Firebase 초기화 및 오류 방지 ---
+        let db = null;
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined') {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.database();
+                console.log("Firebase가 성공적으로 초기화되었습니다.");
+            } else {
+                console.warn("Firebase 라이브러리 또는 config.js가 로드되지 않았습니다. 실시간 데이터는 작동하지 않습니다.");
+            }
+        } catch(e) { 
+            console.error("Firebase 초기화 중 오류 발생. 시뮬레이션만 작동합니다.", e);
+        }
+        
+        const loadTime = Date.now();
+        const oneHourAgo = loadTime - (60 * 60 * 1000);
+        
         // --- 성능 핵심: 배치 처리를 위한 큐(Queue) ---
         let itemQueue = [];
         let isProcessingQueue = false;
 
         function startListening() {
-            // 이 부분은 테스트 환경에서는 주석 처리하거나, 실제 Firebase 로직을 적용해야 합니다.
-            // 현재는 테스트 버튼에 집중하기 위해 리스너 로직은 건너뜁니다.
-            if (!db) return;
-            // ... (기존 startListening 로직)
+            if (!db) return; // DB 객체가 없으면 리스너를 시작하지 않음
+
+            const inputRef = db.ref('inputs').orderByChild('timestamp').startAt(oneHourAgo);
+
+            // 과거 데이터 처리
+            inputRef.once('value').then((snapshot) => {
+                const history = [];
+                snapshot.forEach((child) => {
+                    const data = child.val();
+                    const itemTime = data.timestamp || Date.now();
+                    if (itemTime < loadTime) history.push(data);
+                });
+                
+                history.slice(-MAX_ELEMENTS).forEach(data => {
+                    const emoji = data.emoji || data.text || "❤️";
+                    spawnItem(emoji, true);
+                });
+
+                // 실시간 리스너 설정
+                inputRef.on('child_added', (snapshot) => {
+                    const data = snapshot.val();
+                    const itemTime = data.timestamp || Date.now();
+                    if (itemTime < loadTime) return;
+
+                    itemQueue.push({
+                        emoji: data.emoji || data.text || "❤️",
+                        isHistory: false
+                    });
+
+                    if (!isProcessingQueue) {
+                        requestAnimationFrame(processQueue);
+                    }
+                });
+            });
         }
-        // startListening(); // 테스트 시뮬레이션에 집중하기 위해 주석 처리
+        
+        // Firebase 초기화에 성공했을 경우만 리스너 시작
+        if (db) {
+            startListening();
+        }
+
 
         // --- 배치 처리 루프 (requestAnimationFrame) ---
         function processQueue() {
@@ -206,11 +243,10 @@
             } else {
                 isProcessingQueue = false;
             }
-            // 카운터 업데이트
             counterElement.innerText = `${activeElements.length}/${MAX_ELEMENTS}`;
         }
 
-        // --- 아이템 요소 생성 함수 (이전 코드와 동일) ---
+        // --- 아이템 요소 생성 함수 (로직은 동일) ---
         function createItemElement(emojiChar, isHistory) {
             const el = document.createElement('div');
             el.classList.add('item');
@@ -218,6 +254,7 @@
             let x = (Math.random() - 0.5) * 2;
             x = x * x * x; 
             const finalX = x * 280;
+
             const randomDepth = Math.random(); 
             let finalY = (randomDepth * 150) - 20; 
             finalY += Math.abs(finalX) * 0.4;
@@ -252,15 +289,24 @@
             return el;
         }
 
-        // --- ⚡ 1분간 1000개 발사 시뮬레이션 로직 ---
+        // --- DOM 직접 생성 함수 (과거 데이터 로드용) ---
+        function spawnItem(emojiChar, isHistory) {
+            if (activeElements.length >= MAX_ELEMENTS) {
+                const oldestEl = activeElements.shift();
+                if (oldestEl) oldestEl.remove();
+            }
+            const el = createItemElement(emojiChar, isHistory);
+            pileLayer.appendChild(el);
+            activeElements.push(el);
+        }
+
+        // --- ⚡ 1분간 1000개 발사 시뮬레이션 로직 (작동 보장) ---
         let spawnCount = 0;
         let spawnInterval = null;
         const TOTAL_TO_SPAWN = 1000;
-        // 60초 (60000ms) 동안 1000ms마다 실행
-        // 매 초마다 1000개 / 60초 = 약 16.66개를 생성해야 함
         
         function startSimulation() {
-            if (spawnInterval) return; // 이미 실행 중이면 중단
+            if (spawnInterval) return;
 
             startTestBtn.disabled = true;
             clearBtn.disabled = true;
@@ -268,7 +314,6 @@
             const emojis = ["🔥", "✨", "🎁", "💎", "⭐️"];
 
             const intervalFn = () => {
-                // 초당 약 17개 이모지 생성 (1000ms마다 17개)
                 const numToSpawn = Math.round(TOTAL_TO_SPAWN / 60); 
 
                 for (let i = 0; i < numToSpawn && spawnCount < TOTAL_TO_SPAWN; i++) {
@@ -277,12 +322,10 @@
                     spawnCount++;
                 }
 
-                // 큐 처리기 호출
                 if (!isProcessingQueue) {
                     requestAnimationFrame(processQueue);
                 }
 
-                // 1000개 모두 발사했으면 인터벌 종료
                 if (spawnCount >= TOTAL_TO_SPAWN) {
                     clearInterval(spawnInterval);
                     spawnInterval = null;
@@ -295,11 +338,11 @@
                 }
             };
             
-            // 1초(1000ms)마다 intervalFn 실행
             spawnInterval = setInterval(intervalFn, 1000); 
             startTestBtn.innerText = "⏳ 발사 중...";
         }
 
+        // 🌟 버튼 이벤트 리스너는 항상 등록되어 실행되도록 보장 🌟
         startTestBtn.addEventListener('click', startSimulation);
 
         // --- 🗑️ 모두 지우기 로직 ---
@@ -308,7 +351,6 @@
                  clearInterval(spawnInterval);
                  spawnInterval = null;
             }
-            // 모든 DOM 요소 제거
             pileLayer.innerHTML = ''; 
             activeElements = [];
             itemQueue = [];
