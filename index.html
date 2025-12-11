@@ -31,11 +31,11 @@
         /* 보물상자 */
         #chest-container {
             position: absolute;
-            bottom: 5%;
+            bottom: 10%; /* 바닥에 쌓일 공간 확보를 위해 조금 올림 */
             left: 50%;
             transform: translateX(-50%);
-            width: 30%; /* 상자 크기 살짝 키움 */
-            z-index: 10;
+            width: 30%;
+            z-index: 20; /* 쌓인 하트들보다 앞에 오도록 */
             filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.4));
         }
 
@@ -44,63 +44,65 @@
             display: block;
         }
 
-        /* 튀어오르는 왕 하트 스타일 */
-        .pop-out-heart {
+        /* 튀어오르는 이모지/하트 공통 스타일 */
+        .flying-item {
             position: absolute;
             left: 50%; 
-            bottom: 20%; /* 상자 내부에서 시작 */
-            font-size: 15rem; /* 영상처럼 매우 크게 */
-            z-index: 5; /* 상자(10)보다는 뒤, 배경보다는 앞 -> 상자 안에서 나오는 느낌 */
-            
-            /* 애니메이션 설정 */
-            animation: popOutMove 2.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-            
-            /* 이쁜 하트를 위한 필터 */
-            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)) brightness(1.2);
-            will-change: transform, opacity;
+            bottom: 20%; /* 상자 내부 시작점 */
+            font-size: 4rem; /* 크기를 15rem -> 4rem으로 축소 */
+            z-index: 10; /* 상자 뒤에서 나와서 바닥에 깔림 */
+            user-select: none;
             pointer-events: none;
+            will-change: transform, opacity;
+            
+            /* CSS 변수로 랜덤 도착 지점 제어 */
+            --end-x: 0px; 
+            --end-y: 0px;
+            --rotate-end: 0deg;
+
+            /* 애니메이션: 1.5초 동안 튀어올라 바닥에 안착 */
+            animation: jumpAndFall 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
         }
 
-        /* 하트 내부 (두근거림 효과용) */
-        .heart-inner {
-            display: block;
-            animation: heartBeatInner 1.2s infinite ease-in-out;
+        /* 변신할 때 '펑' 하는 효과 */
+        .poof-effect {
+            animation: poofScale 0.3s ease-out forwards;
         }
 
-        /* 1. 튀어오르는 전체 움직임 */
-        @keyframes popOutMove {
+        /* 이미 바닥에 떨어진 하트 (애니메이션 종료 후 클래스) */
+        .landed {
+            position: absolute;
+            z-index: 5; /* 상자보다 뒤, 배경보다 앞 */
+            animation: none; /* 애니메이션 멈춤 */
+            transform: translate(var(--end-x), var(--end-y)) rotate(var(--rotate-end));
+            /* 바닥에 있는 하트는 은은하게 두근거림 */
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+        }
+
+        /* 애니메이션 키프레임 */
+        @keyframes jumpAndFall {
             0% {
-                transform: translate(-50%, 50%) scale(0.1);
                 opacity: 0;
+                transform: translate(-50%, 0) scale(0.5);
             }
-            15% {
+            10% {
                 opacity: 1;
-                /* 위로 솟구치며 커짐 */
-                transform: translate(-50%, -60%) scale(1.2); 
             }
-            25% {
-                /* 살짝 내려오며 안착 (반동) */
-                transform: translate(-50%, -40%) scale(1.0); 
-            }
-            80% {
-                opacity: 1;
-                transform: translate(-50%, -50%) scale(1.0);
+            50% {
+                /* 공중 가장 높은 곳 (위로 솟구침) */
+                transform: translate(-50%, -300px) scale(1.2);
             }
             100% {
-                opacity: 0;
-                /* 서서히 위로 사라짐 */
-                transform: translate(-50%, -150%) scale(1.1); 
+                /* 바닥 랜덤 위치로 낙하 */
+                transform: translate(var(--end-x), var(--end-y)) rotate(var(--rotate-end)) scale(1);
             }
         }
 
-        /* 2. 하트 자체의 두근거림 */
-        @keyframes heartBeatInner {
-            0% { transform: scale(1); }
-            14% { transform: scale(1.15); } 
-            28% { transform: scale(1); }
-            42% { transform: scale(1.15); } 
-            70% { transform: scale(1); }
-            100% { transform: scale(1); }
+        /* 변신 시 순간적으로 커졌다 작아지는 효과 */
+        @keyframes poofScale {
+            0% { filter: brightness(2); transform: scale(1.5); }
+            50% { filter: brightness(1.5); transform: scale(0.8); }
+            100% { filter: brightness(1); transform: scale(1); }
         }
 
     </style>
@@ -108,9 +110,10 @@
 <body>
 
     <div id="game-container">
+        <div id="pile-container"></div>
+
         <div id="chest-container">
             <img src="./chest_3d.png" alt="Treasure Chest" id="chest-img">
-            <div id="spawn-point"></div>
         </div>
     </div>
 
@@ -122,7 +125,8 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         const chestContainer = document.getElementById('chest-container');
-
+        const pileContainer = document.getElementById('pile-container'); // 하트가 쌓일 곳
+        
         let inputListener = null;
         const startTime = Date.now();
 
@@ -131,36 +135,82 @@
             inputListener = inputRef.on('child_added', (snapshot) => {
                 const data = snapshot.val();
                 if (data.timestamp && data.timestamp > startTime) {
-                    // 입력이 들어오면 하트 팝업 실행
-                    spawnBigHeart();
+                    
+                    // Firebase에서 받은 텍스트(이모지) 추출
+                    // 예: data.text, data.message, data.emoji 등 실제 필드명에 맞게 수정 필요
+                    // 여기서는 안전하게 여러 필드를 확인하고 없으면 기본값 사용
+                    const receivedEmoji = data.emoji || data.text || data.message || "❓";
+
+                    spawnEmojiToHeart(receivedEmoji);
                 }
             });
         }
 
         startListening();
 
-        function spawnBigHeart() {
-            // 1. 하트 감싸는 컨테이너 생성
-            const heartWrapper = document.createElement('div');
-            heartWrapper.classList.add('pop-out-heart');
-            
-            // 2. 하트 내부 (두근거림용)
-            const heartInner = document.createElement('span');
-            heartInner.classList.add('heart-inner');
-            heartInner.innerText = "❤️"; // 영상처럼 빨간 하트 고정 (원하시면 입력된 이모지로 변경 가능)
-            
-            heartWrapper.appendChild(heartInner);
-            chestContainer.appendChild(heartWrapper);
+        function spawnEmojiToHeart(emojiChar) {
+            // 1. 요소 생성
+            const item = document.createElement('div');
+            item.classList.add('flying-item');
+            item.innerText = emojiChar; // 처음엔 받은 이모지로 시작
 
-            // 3. 약간의 랜덤 각도 추가 (너무 정직하게 위로만 가면 재미없으니 -15도 ~ 15도 기울기)
-            const randomRotate = (Math.random() * 30) - 15;
-            heartInner.style.transform = `rotate(${randomRotate}deg)`;
+            // 2. 랜덤 도착 위치 계산 (상자 주변 바닥에 쌓이도록)
+            // x: -200px ~ 200px (상자 중심 기준 좌우)
+            // y: 50px ~ 150px (상자 바닥 근처)
+            const randomX = (Math.random() * 500) - 250; 
+            const randomY = (Math.random() * 100) + 20; 
+            const randomRotate = (Math.random() * 60) - 30;
 
-            // 4. 애니메이션 종료 후 삭제 (메모리 관리)
-            heartWrapper.addEventListener('animationend', () => {
-                heartWrapper.remove();
+            // CSS 변수에 랜덤 값 주입
+            item.style.setProperty('--end-x', `${randomX}px`);
+            item.style.setProperty('--end-y', `${randomY}px`);
+            item.style.setProperty('--rotate-end', `${randomRotate}deg`);
+
+            // 상자 안에 추가 (초기 위치 잡기 위함)
+            chestContainer.appendChild(item);
+
+            // 3. 변신 로직 (타이밍 조절)
+            // 애니메이션 전체가 1.5초이고, 50% 지점(0.75초)이 가장 높은 곳(Top)입니다.
+            // 공중에 떴을 때 하트로 바꿉니다.
+            setTimeout(() => {
+                // 텍스트 변경
+                item.innerText = "❤️";
+                
+                // 펑 터지는 효과 클래스 추가 (반짝임 등)
+                item.classList.add('poof-effect');
+                
+                // 부드러운 전환을 위해 기존 transform 스타일 덮어쓰지 않도록 주의
+                // (CSS animation이 transform을 제어 중이므로 텍스트만 바꿔도 됨)
+            }, 750); // 0.75초 (애니메이션 중간 지점)
+
+            // 4. 애니메이션 종료 후 처리 (쌓이기)
+            item.addEventListener('animationend', () => {
+                // 애니메이션 클래스 제거 (충돌 방지)
+                item.classList.remove('flying-item');
+                item.classList.remove('poof-effect');
+                
+                // "바닥에 떨어진 상태" 클래스 추가
+                item.classList.add('landed');
+
+                // 중요: 현재 상자(chestContainer) 안에 있으면 상자가 움직일 때 같이 움직일 수 있으므로,
+                // 바깥의 고정된 배경 컨테이너(pileContainer)나 game-container로 옮겨줍니다.
+                // 다만, 위치 계산이 복잡해질 수 있으므로, 여기서는 
+                // chestContainer 내부에서 position을 고정하거나,
+                // 시각적으로 문제없다면 그대로 둡니다.
+                
+                // 더 자연스러운 쌓임을 위해 z-index를 랜덤하게 주어 
+                // 어떤 건 앞에, 어떤 건 뒤에 쌓이게 함
+                item.style.zIndex = Math.floor(Math.random() * 10);
             });
         }
+        
+        // 테스트용: 화면 클릭 시 랜덤 이모지로 테스트 가능
+        document.body.addEventListener('click', () => {
+             const randomEmojis = ["🦁", "🐯", "😀", "🔥", "💎", "👻"];
+             const pick = randomEmojis[Math.floor(Math.random() * randomEmojis.length)];
+             spawnEmojiToHeart(pick);
+        });
+
     </script>
 </body>
 </html>
