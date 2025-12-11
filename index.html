@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>따크프 추억상자</title>
+    <title>Emoji Treasure Chest Event</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
 
@@ -15,7 +15,7 @@
             align-items: center;
             height: 100vh;
             font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
-            perspective: 1200px; /* 원근감 강화 */
+            perspective: 1200px;
         }
 
         #game-container {
@@ -38,7 +38,8 @@
             transform: translateX(-50%);
             width: 30%;
             height: auto;
-            z-index: 50; /* 하트들 사이에서 위치 잡기 위해 */
+            /* z-index를 낮춰서 아이템들이 웬만하면 이 위로 올라오게 설정 */
+            z-index: 10; 
             transform-style: preserve-3d;
         }
 
@@ -47,55 +48,59 @@
             display: block;
             filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.2));
             position: relative;
-            z-index: 50;
+            /* 이미지는 컨테이너 바닥에 깔림 */
+            z-index: 10; 
         }
 
-        /* 하트들이 쌓이는 레이어 (상자 위치 기준) */
+        /* 하트들이 쌓이는 레이어 */
         #pile-layer {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none;
             transform-style: preserve-3d;
+            /* 레이어 자체를 상자보다 앞으로 */
+            z-index: 20; 
         }
 
-        /* 공통 아이템 스타일 */
+        /* 아이템 공통 스타일 */
         .item {
             position: absolute;
             left: 50%;
-            bottom: 25%; /* 발사 시작점 (상자 내부) */
+            bottom: 25%; /* 상자 입구 부근에서 시작 */
             font-size: 3.5rem;
             user-select: none;
-            will-change: transform;
+            will-change: transform; /* 성능 최적화 핵심 */
             
-            /* 3D 텍스트 두께감 */
+            /* 3D 텍스트 두께감 (가벼운 그림자) */
             text-shadow: 
                 0px 1px 0px #800000,
                 0px 2px 0px #600000,
-                0px 3px 5px rgba(0,0,0,0.6);
+                0px 3px 5px rgba(0,0,0,0.3);
         }
 
-        /* 1. 날아가는 상태 (애니메이션 중) */
+        /* 1. 날아가는 상태 */
         .flying {
-            z-index: 100; /* 날아갈 땐 가장 앞에 */
+            z-index: 9999 !important; /* 날아갈 땐 무조건 맨 앞 */
             --tx: 0px; --ty: 0px; --rz: 0deg; --rx: 0deg;
-            animation: jump 1.2s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+            
+            /* 시간 2배로 늘림 (1.2s -> 2.4s) */
+            animation: jump 2.4s cubic-bezier(0.19, 1, 0.22, 1) forwards;
         }
 
-        /* 2. 바닥에 쌓인 상태 (정적) */
+        /* 2. 바닥에 쌓인 상태 */
         .landed {
-            /* z-index는 JS에서 깊이에 따라 동적 부여 */
             transform-origin: center bottom;
-            /* JS에서 계산된 최종 위치로 즉시 고정 */
             transform: 
                 translate3d(var(--tx), var(--ty), 0) 
                 rotateX(var(--rx)) 
                 rotateY(var(--ry)) 
                 rotateZ(var(--rz));
             
+            /* 착지한 뒤에만 무거운 그림자 적용 (렉 방지) */
             filter: drop-shadow(0 5px 5px rgba(0,0,0,0.5));
+            transition: filter 0.3s;
         }
 
-        /* 펑 터지는 효과 */
         .poof {
             animation: poofAnim 0.3s ease-out forwards;
         }
@@ -105,16 +110,17 @@
                 opacity: 0;
                 transform: translate3d(-50%, 0, 0) scale(0.5);
             }
-            15% {
+            10% {
                 opacity: 1;
-                transform: translate3d(-50%, -120px, 50px) scale(1.1);
+                /* 위로 솟구침 */
+                transform: translate3d(-50%, -150px, 100px) scale(1.1);
             }
-            50% {
-                /* 정점: 위로 솟구침 */
-                transform: translate3d(-50%, -350px, 100px) scale(1.3);
+            40% {
+                /* 정점 */
+                transform: translate3d(-50%, -400px, 150px) scale(1.3);
             }
             100% {
-                /* 목표 지점 착지 */
+                /* 착지 */
                 transform: 
                     translate3d(var(--tx), var(--ty), 0) 
                     rotateX(var(--rx)) 
@@ -129,11 +135,30 @@
             100% { filter: brightness(1); transform: scale(1); }
         }
 
-        /* 디버깅/테스트 버튼용 (필요시 숨김 처리) */
-        #debug-area {
-            position: absolute; top: 10px; left: 10px; z-index: 9999;
-            color: white; font-size: 12px; opacity: 0.5;
+        /* 테스트 컨트롤러 UI */
+        #controls {
+            position: absolute; 
+            top: 20px; 
+            left: 20px; 
+            z-index: 10000;
+            display: flex;
+            gap: 10px;
         }
+
+        button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+            transition: 0.2s;
+        }
+        button:hover { background: rgba(255, 255, 255, 0.4); transform: scale(1.05); }
+        button:active { transform: scale(0.95); }
+
     </style>
 </head>
 <body>
@@ -144,7 +169,10 @@
             <div id="pile-layer"></div>
         </div>
         
-        <div id="debug-area">Click anywhere to test input</div>
+        <div id="controls">
+            <button onclick="testExplosion()">⚡ 500개 발사 테스트</button>
+            <button onclick="clearItems()">🗑️ 청소하기</button>
+        </div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -152,17 +180,23 @@
     <script src="./config.js"></script>
 
     <script>
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+        // Firebase 설정이 없어도 에러나지 않게 예외처리 (테스트용)
+        try {
+            firebase.initializeApp(firebaseConfig);
+        } catch(e) {
+            console.log("Firebase config missing - running in offline test mode");
+        }
+
         const pileLayer = document.getElementById('pile-layer');
-        
-        // 페이지 로드 시간 (이 시간 이전 데이터는 애니메이션 생략)
+        let db;
+        try { db = firebase.database(); } catch(e){}
+
         const loadTime = Date.now();
-        // 1시간 전 시간 계산 (밀리초: 60분 * 60초 * 1000)
         const oneHourAgo = loadTime - (60 * 60 * 1000);
 
         function startApp() {
-            // timestamp가 1시간 전 ~ 현재/미래 인 데이터만 쿼리
+            if(!db) return; // DB 없으면 중단
+
             const inputRef = db.ref('inputs')
                 .orderByChild('timestamp')
                 .startAt(oneHourAgo);
@@ -170,17 +204,10 @@
             inputRef.on('child_added', (snapshot) => {
                 const data = snapshot.val();
                 if (!data) return;
-
-                // 데이터의 타임스탬프가 없으면 현재 시간으로 간주
                 const itemTime = data.timestamp || Date.now();
-                
-                // 1시간이 지났는지 클라이언트 단에서도 한번 더 체크 (안전장치)
                 if (itemTime < oneHourAgo) return;
 
                 const emoji = data.emoji || data.text || "❤️";
-                
-                // 페이지 로드보다 이전에 생성된 데이터인가? (새로고침 시 복원용)
-                // 약간의 버퍼(2초)를 두어 로딩 직후 들어온 데이터도 처리
                 const isHistory = itemTime < (loadTime - 2000);
 
                 spawnItem(emoji, isHistory);
@@ -189,91 +216,89 @@
 
         startApp();
 
+        // --- 아이템 생성 핵심 로직 ---
         function spawnItem(emojiChar, isHistory) {
             const el = document.createElement('div');
             el.classList.add('item');
 
-            // --- [핵심] 좌표 계산 알고리즘 (상자 앞쪽으로 흐르게) ---
-            
-            // 1. X좌표: 정규분포 느낌 (중앙에 몰리고 양옆으로 퍼짐)
-            // -180px ~ +180px 범위
-            let x = (Math.random() - 0.5) * 2; // -1 ~ 1
-            x = x * x * x; // 3제곱하여 중앙값(0) 근처 확률을 높임
-            const finalX = x * 250; // 퍼짐 정도 조절
+            // 1. 위치 계산 (X축 퍼짐)
+            let x = (Math.random() - 0.5) * 2; 
+            x = x * x * x; // 중앙 집중형 분포
+            const finalX = x * 280; // 퍼짐 정도 약간 증가
 
-            // 2. Y좌표: X가 중앙일수록 위쪽(상자 안), X가 끝일수록 아래쪽(바닥)
-            // 상자 입구 ~ 앞쪽 바닥
+            // 2. 깊이 계산 (Y축: 상자 안~앞바닥)
             const randomDepth = Math.random(); 
-            // 기본 Y: 0(입구) ~ 150(바닥)
-            let finalY = (randomDepth * 120) - 30; 
+            // -20(약간 안쪽) ~ 180(앞쪽 바닥) -> 대부분 앞쪽으로 오게 조정
+            let finalY = (randomDepth * 200) - 20; 
             
-            // X가 멀어질수록 Y도 내려가게 보정 (부채꼴 형태)
-            finalY += Math.abs(finalX) * 0.3;
+            // X가 멀어질수록 Y도 내려가게(부채꼴)
+            finalY += Math.abs(finalX) * 0.4;
 
-            // 3. 회전 (바닥에 떨어진 느낌)
-            const rx = 50 + (Math.random() * 30); // 50~80도 눕힘
-            const ry = (Math.random() - 0.5) * 40; // 좌우 비틀기
-            const rz = (Math.random() - 0.5) * 60; // 랜덤 회전
+            // 3. 회전
+            const rx = 60 + (Math.random() * 20); // 많이 눕힘
+            const ry = (Math.random() - 0.5) * 50;
+            const rz = (Math.random() - 0.5) * 90;
 
-            // CSS 변수 주입
             el.style.setProperty('--tx', `${finalX}px`);
             el.style.setProperty('--ty', `${finalY}px`);
             el.style.setProperty('--rx', `${rx}deg`);
             el.style.setProperty('--ry', `${ry}deg`);
             el.style.setProperty('--rz', `${rz}deg`);
 
-            // 4. 깊이(Z-Index) 설정: 화면 아래쪽(Y가 큰 값)일수록 앞에 와야 함
-            // 상자가 z-index 50이므로, 그 근처에서 놀게 설정
-            // 상자 안쪽(-Y)은 뒤로, 바닥쪽(+Y)은 앞으로
-            const zIndexBase = 50; 
+            // 4. Z-Index 우선순위 조정 (상자가 가리지 않게)
+            // 상자 이미지는 z-index: 10 입니다.
+            // 아이템은 기본 20부터 시작해서 Y가 클수록(앞일수록) 더 높게 설정
+            const zIndexBase = 20; 
             el.style.zIndex = Math.floor(zIndexBase + finalY);
 
             pileLayer.appendChild(el);
 
             if (isHistory) {
-                // [과거 데이터] 애니메이션 스킵, 바로 하트로 변환 및 위치 고정
                 el.innerText = "❤️";
                 el.classList.add('landed');
             } else {
-                // [실시간 데이터] 이모지로 시작 -> 튀어오름 -> 하트 변신
                 el.innerText = emojiChar;
                 el.classList.add('flying');
 
-                // 0.2초 후 하트로 변신 (펑!)
+                // 2.4s 애니메이션 중 펑 터지는 타이밍 (약 0.4초 시점)
                 setTimeout(() => {
                     el.innerText = "❤️";
                     el.classList.add('poof');
-                }, 200);
+                }, 400); // 속도 느려졌으니 변신 타이밍도 조금 늦춤
 
-                // 애니메이션 끝나면 정적 상태로 전환
                 el.addEventListener('animationend', () => {
                     el.classList.remove('flying');
                     el.classList.remove('poof');
                     el.classList.add('landed');
                 });
             }
-
-            // (선택사항) 1000개가 넘어가면 DOM 최적화를 위해 가장 오래된 것 삭제할 수도 있음
-            // 요청사항에 "사라지지 않게"라고 하셨으므로 삭제 로직은 넣지 않음.
         }
 
-        // --- 테스트용 클릭 이벤트 (실제 배포시 제거하거나 유지 가능) ---
-        // 클릭하면 '새로운 데이터'처럼 동작
-        document.body.addEventListener('click', (e) => {
-            // 클릭은 DB 쓰기가 아니라 로컬 테스트용 함수 호출
-            const emojis = ["🔥", "✨", "🎁", "💎", "⭐️"];
-            const pick = emojis[Math.floor(Math.random() * emojis.length)];
+        // --- [테스트 기능] 500개 폭발 ---
+        function testExplosion() {
+            const emojis = ["🔥", "✨", "🎁", "💎", "⭐️", "💖", "🎉"];
+            const count = 500;
             
-            // DB에 실제로 쏘는 시뮬레이션 (원하시면 아래 주석 해제하여 DB 테스트 가능)
-            /*
-            db.ref('inputs').push({
-                emoji: pick,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            });
-            */
-           
-            // 시각적 테스트만
-            spawnItem(pick, false); 
+            // 브라우저 렉 방지를 위해 1초(1000ms) 동안 나누어서 생성 (Staggering)
+            for (let i = 0; i < count; i++) {
+                // 랜덤한 딜레이를 줌 (0 ~ 1000ms 사이)
+                const delay = Math.random() * 1000;
+                
+                setTimeout(() => {
+                    const pick = emojis[Math.floor(Math.random() * emojis.length)];
+                    spawnItem(pick, false);
+                }, delay);
+            }
+        }
+
+        function clearItems() {
+            pileLayer.innerHTML = '';
+        }
+
+        // 화면 클릭 시 1개씩 테스트
+        document.body.addEventListener('click', (e) => {
+            if(e.target.tagName === 'BUTTON') return; // 버튼 클릭 제외
+            spawnItem("💎", false); 
         });
 
     </script>
