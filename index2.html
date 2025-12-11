@@ -1,1 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>보물상자에 선물 보내기</title>
+    <style>
+        body {
+            font-family: 'Suit', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 80%;
+            max-width: 400px;
+        }
+        h1 { margin-bottom: 20px; font-size: 1.5rem; color: #333; }
+        input {
+            width: 80%;
+            padding: 15px;
+            font-size: 2rem;
+            text-align: center;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.2rem;
+            background-color: #ff9800; /* 상자와 어울리는 주황색 */
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-weight: bold;
+        }
+        button:active { transform: scale(0.98); }
+        .footer { margin-top: 20px; color: #888; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
 
+    <div class="container">
+        <h1>🎁 보물상자에 선물 던지기!</h1>
+        <p>나만의 이모지를 입력하고 버튼을 누르세요.</p>
+        
+        <input type="text" id="userEmoji" placeholder="😊" maxlength="2">
+        
+        <button id="sendBtn" onclick="sendEmoji()">상자로 던지기!</button>
+    </div>
+    
+    <div class="footer">Event by YourName</div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="./config.js"></script>
+
+    <script>
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        function sendEmoji() {
+            const emojiInput = document.getElementById('userEmoji');
+            const emoji = emojiInput.value;
+
+            if (!emoji) {
+                alert("이모지를 입력해주세요!");
+                return;
+            }
+
+            // Firebase에 데이터 전송
+            const inputRef = db.ref('inputs');
+            inputRef.push({
+                emoji: emoji,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            }).then(() => {
+                // 전송 성공 시 효과
+                const btn = document.getElementById('sendBtn');
+                const originalText = btn.innerText;
+                
+                btn.innerText = "🚀 전송 완료!";
+                btn.style.backgroundColor = "#4CAF50";
+                
+                // 입력창 초기화
+                emojiInput.value = '';
+
+                setTimeout(() => {
+                    btn.innerText = originalText;
+                    btn.style.backgroundColor = "#ff9800";
+                }, 1000);
+            }).catch((error) => {
+                console.error("Error writing document: ", error);
+                alert("전송 실패! 다시 시도해주세요.");
+            });
+        }
+    </script>
+</body>
+</html>
