@@ -2,66 +2,95 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>보물상자에 선물 보내기</title>
     <style>
+        :root {
+            --primary-color: #ff9800;
+            --success-color: #4CAF50;
+            --bg-color: #f0f2f5;
+        }
         body {
-            font-family: 'Suit', sans-serif;
-            background-color: #f0f2f5;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            height: 100vh; /* 모바일 브라우저 높이 이슈 대응 */
+            height: -webkit-fill-available;
             margin: 0;
-            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
         }
         .container {
             background: white;
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            width: 80%;
+            padding: 40px 30px;
+            border-radius: 25px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 100%;
             max-width: 400px;
-        }
-        h1 { margin-bottom: 20px; font-size: 1.5rem; color: #333; }
-        input {
-            width: 80%;
-            padding: 15px;
-            font-size: 2rem;
             text-align: center;
-            border: 2px solid #ddd;
-            border-radius: 10px;
-            margin-bottom: 20px;
         }
-        button {
+        h1 { margin: 0 0 15px 0; font-size: 1.8rem; color: #333; }
+        p { color: #666; margin-bottom: 30px; }
+        
+        .input-group { margin-bottom: 25px; }
+        input {
             width: 100%;
             padding: 15px;
-            font-size: 1.2rem;
-            background-color: #ff9800; /* 상자와 어울리는 주황색 */
+            font-size: 3rem;
+            text-align: center;
+            border: 3px solid #eee;
+            border-radius: 15px;
+            box-sizing: border-box; /* 패딩 포함 너비 계산 */
+            transition: border-color 0.3s;
+        }
+        input:focus { outline: none; border-color: var(--primary-color); }
+
+        button {
+            width: 100%;
+            padding: 18px;
+            font-size: 1.3rem;
+            background-color: var(--primary-color);
             color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: 15px;
             cursor: pointer;
-            transition: background 0.3s;
-            font-weight: bold;
+            transition: all 0.3s ease;
+            font-weight: 800;
+            box-shadow: 0 4px 6px rgba(255, 152, 0, 0.2);
         }
         button:active { transform: scale(0.98); }
-        .footer { margin-top: 20px; color: #888; font-size: 0.8rem; }
+        
+        /* 상태별 버튼 스타일 */
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        button.success {
+            background-color: var(--success-color);
+            box-shadow: 0 4px 6px rgba(76, 175, 80, 0.3);
+        }
+
+        .footer { margin-top: 30px; color: #aaa; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>🎁 보물상자에 선물 던지기!</h1>
-        <p>나만의 이모지를 입력하고 버튼을 누르세요.</p>
+        <h1>🎁 보물상자 채우기</h1>
+        <p>좋아하는 이모지를 하나 골라<br>상자로 던져주세요!</p>
         
-        <input type="text" id="userEmoji" placeholder="😊" maxlength="2">
+        <div class="input-group">
+            <input type="text" id="userEmoji" placeholder="✨" maxlength="5" enterkeyhint="send">
+        </div>
         
-        <button id="sendBtn" onclick="sendEmoji()">상자로 던지기!</button>
+        <button id="sendBtn">상자로 던지기! 🚀</button>
     </div>
     
-    <div class="footer">Event by YourName</div>
+    <div class="footer">실시간 인터랙티브 이벤트</div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -70,40 +99,75 @@
     <script>
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+        const sendBtn = document.getElementById('sendBtn');
+        const emojiInput = document.getElementById('userEmoji');
+        const originalBtnText = sendBtn.innerText;
+
+        // 버튼 클릭 이벤트
+        sendBtn.addEventListener('click', sendEmoji);
+
+        // 엔터키 이벤트
+        emojiInput.addEventListener('keypress', (e) => {
+            if(e.key === 'Enter') sendEmoji();
+        });
 
         function sendEmoji() {
-            const emojiInput = document.getElementById('userEmoji');
-            const emoji = emojiInput.value;
+            const emoji = emojiInput.value.trim();
 
+            // 유효성 검사: 비어있으면 알림
             if (!emoji) {
-                alert("이모지를 입력해주세요!");
+                emojiInput.focus();
+                // 간단한 흔들림 효과 (선택사항)
+                emojiInput.style.borderColor = 'red';
+                setTimeout(() => emojiInput.style.borderColor = '#eee', 500);
                 return;
             }
 
-            // Firebase에 데이터 전송
-            const inputRef = db.ref('inputs');
-            inputRef.push({
-                emoji: emoji,
+            // 1. 버튼 로딩 상태로 변경 (중복 전송 방지)
+            setButtonState('loading');
+
+            // 2. Firebase에 데이터 전송
+            db.ref('inputs').push({
+                emoji: emoji, // 실제로는 화면에서 랜덤으로 바뀌지만, 입력 흔적을 남김
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             }).then(() => {
-                // 전송 성공 시 효과
-                const btn = document.getElementById('sendBtn');
-                const originalText = btn.innerText;
-                
-                btn.innerText = "🚀 전송 완료!";
-                btn.style.backgroundColor = "#4CAF50";
-                
-                // 입력창 초기화
-                emojiInput.value = '';
+                // 3. 성공 시 처리
+                setButtonState('success');
+                emojiInput.value = ''; // 입력창 비우기
 
+                // 1.5초 후 버튼 원래대로 복귀
                 setTimeout(() => {
-                    btn.innerText = originalText;
-                    btn.style.backgroundColor = "#ff9800";
-                }, 1000);
+                    setButtonState('default');
+                }, 1500);
+
             }).catch((error) => {
-                console.error("Error writing document: ", error);
-                alert("전송 실패! 다시 시도해주세요.");
+                // 4. 실패 시 처리
+                console.error("Error:", error);
+                alert("전송에 실패했습니다. 잠시 후 다시 시도해주세요.");
+                setButtonState('default');
             });
+        }
+
+        // 버튼 상태 관리 함수
+        function setButtonState(state) {
+            switch(state) {
+                case 'loading':
+                    sendBtn.disabled = true;
+                    sendBtn.innerText = "보내는 중... 🔄";
+                    sendBtn.classList.remove('success');
+                    break;
+                case 'success':
+                    sendBtn.disabled = true; // 성공 메시지 보여주는 동안도 비활성
+                    sendBtn.innerText = "🎉 전송 성공!";
+                    sendBtn.classList.add('success');
+                    break;
+                case 'default':
+                default:
+                    sendBtn.disabled = false;
+                    sendBtn.innerText = originalBtnText;
+                    sendBtn.classList.remove('success');
+                    break;
+            }
         }
     </script>
 </body>
