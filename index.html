@@ -2,10 +2,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>High Performance Emoji Chest (Firebase Ready)</title>
+    <title>Pixi.js High Performance Emoji Chest</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
-
         body {
             margin: 0;
             background-color: #111;
@@ -14,94 +12,18 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
-            font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
-            perspective: 1200px;
+            /* 캔버스 컨테이너 스타일 */
         }
-
-        #game-container {
+        #app-container {
             width: 100vw;
             height: 56.25vw;
             max-height: 100vh;
             max-width: 177.78vh;
-            background: radial-gradient(circle at bottom, #512b58 0%, #2c1055 40%, #000000 100%);
             position: relative;
-            overflow: hidden;
             box-shadow: 0 0 100px rgba(0,0,0,0.8);
-            transform-style: preserve-3d;
+            /* 그라데이션 배경은 Pixi.js 캔버스 자체에서 처리됩니다 */
         }
-
-        #chest-wrapper {
-            position: absolute;
-            bottom: 15%;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 30%;
-            height: auto;
-            transform-style: preserve-3d;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        #chest-img {
-            width: 100%;
-            display: block;
-            filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.2));
-            position: relative;
-        }
-
-        #pile-layer {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none;
-            transform-style: preserve-3d;
-            z-index: 20;
-        }
-
-        .item {
-            position: absolute;
-            left: 50%;
-            bottom: 25%;
-            font-size: 3.5rem;
-            user-select: none;
-            will-change: transform;
-        }
-
-        .flying {
-            z-index: 9999 !important;
-            --tx: 0px; --ty: 0px; --rz: 0deg;
-            animation: jump 1.0s cubic-bezier(0.19, 1, 0.22, 1) forwards;
-        }
-
-        .landed {
-            transform-origin: center bottom;
-            transform: 
-                translate3d(var(--tx), var(--ty), 0) 
-                rotateZ(var(--rz))
-                scale(1);
-        }
-
-        .poof {
-            animation: poofAnim 0.2s ease-out forwards;
-        }
-
-        @keyframes jump {
-            0% { opacity: 0; transform: translate3d(-50%, 0, 0) scale(0.5); }
-            20% { opacity: 1; transform: translate3d(-50%, -150px, 50px) scale(1.2); }
-            50% { transform: translate3d(-50%, -350px, 100px) scale(1.4); }
-            100% {
-                transform: 
-                    translate3d(var(--tx), var(--ty), 0) 
-                    rotateZ(var(--rz))
-                    scale(1);
-            }
-        }
-
-        @keyframes poofAnim {
-            0% { filter: brightness(2); transform: scale(1.6); }
-            100% { filter: brightness(1); transform: scale(1); }
-        }
-
-        /* 테스트 버튼 스타일 */
+        /* 테스트 버튼 스타일은 이전과 동일 */
         #test-controls {
             position: fixed; 
             top: 10px; 
@@ -122,248 +44,27 @@
             transition: 0.2s;
         }
         .btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.4); transform: scale(1.05); }
-        .btn:active:not(:disabled) { transform: scale(0.95); }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
-    <div id="game-container">
-        <div id="chest-wrapper">
-            <img src="./chest_3d.png" alt="Chest" id="chest-img">
+    <div id="app-container">
         </div>
-        <div id="pile-layer"></div>
-    </div>
 
     <div id="test-controls">
         <button id="start-test-btn" class="btn">⚡ 1분간 1000개 발사 시뮬레이션</button>
         <button id="clear-btn" class="btn">🗑️ 모두 지우기</button>
-        <span id="counter" style="color: white; padding: 10px; background: rgba(0,0,0,0.5); border-radius: 5px;">0/800</span>
+        <span id="counter" style="color: white; padding: 10px; background: rgba(0,0,0,0.5); border-radius: 5px;">0/MAX</span>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/browser/pixi.min.js"></script>
+    
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="./config.js"></script>
+    
+    <script src="./main.js"></script>
 
-    <script>
-        // --- 전역 변수 설정 및 초기화 ---
-        const pileLayer = document.getElementById('pile-layer');
-        const counterElement = document.getElementById('counter');
-        const startTestBtn = document.getElementById('start-test-btn');
-        const clearBtn = document.getElementById('clear-btn');
-        
-        const MAX_ELEMENTS = 800;
-        let activeElements = [];
-
-        // --- Firebase 초기화 및 오류 방지 ---
-        let db = null;
-        try {
-            if (typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined') {
-                firebase.initializeApp(firebaseConfig);
-                db = firebase.database();
-                console.log("Firebase가 성공적으로 초기화되었습니다.");
-            } else {
-                console.warn("Firebase 라이브러리 또는 config.js가 로드되지 않았습니다. 실시간 데이터는 작동하지 않습니다.");
-            }
-        } catch(e) { 
-            console.error("Firebase 초기화 중 오류 발생. 시뮬레이션만 작동합니다.", e);
-        }
-        
-        const loadTime = Date.now();
-        const oneHourAgo = loadTime - (60 * 60 * 1000);
-        
-        // --- 성능 핵심: 배치 처리를 위한 큐(Queue) ---
-        let itemQueue = [];
-        let isProcessingQueue = false;
-
-        function startListening() {
-            if (!db) return; // DB 객체가 없으면 리스너를 시작하지 않음
-
-            const inputRef = db.ref('inputs').orderByChild('timestamp').startAt(oneHourAgo);
-
-            // 과거 데이터 처리
-            inputRef.once('value').then((snapshot) => {
-                const history = [];
-                snapshot.forEach((child) => {
-                    const data = child.val();
-                    const itemTime = data.timestamp || Date.now();
-                    if (itemTime < loadTime) history.push(data);
-                });
-                
-                history.slice(-MAX_ELEMENTS).forEach(data => {
-                    const emoji = data.emoji || data.text || "❤️";
-                    spawnItem(emoji, true);
-                });
-
-                // 실시간 리스너 설정
-                inputRef.on('child_added', (snapshot) => {
-                    const data = snapshot.val();
-                    const itemTime = data.timestamp || Date.now();
-                    if (itemTime < loadTime) return;
-
-                    itemQueue.push({
-                        emoji: data.emoji || data.text || "❤️",
-                        isHistory: false
-                    });
-
-                    if (!isProcessingQueue) {
-                        requestAnimationFrame(processQueue);
-                    }
-                });
-            });
-        }
-        
-        // Firebase 초기화에 성공했을 경우만 리스너 시작
-        if (db) {
-            startListening();
-        }
-
-
-        // --- 배치 처리 루프 (requestAnimationFrame) ---
-        function processQueue() {
-            isProcessingQueue = true;
-            const batch = itemQueue.splice(0, itemQueue.length);
-            const fragment = document.createDocumentFragment();
-
-            batch.forEach(itemData => {
-                if (activeElements.length >= MAX_ELEMENTS) {
-                    const oldestEl = activeElements.shift();
-                    if (oldestEl) oldestEl.remove();
-                }
-
-                const el = createItemElement(itemData.emoji, itemData.isHistory);
-                fragment.appendChild(el);
-                activeElements.push(el);
-            });
-
-            pileLayer.appendChild(fragment);
-
-            if (itemQueue.length > 0) {
-                requestAnimationFrame(processQueue);
-            } else {
-                isProcessingQueue = false;
-            }
-            counterElement.innerText = `${activeElements.length}/${MAX_ELEMENTS}`;
-        }
-
-        // --- 아이템 요소 생성 함수 (로직은 동일) ---
-        function createItemElement(emojiChar, isHistory) {
-            const el = document.createElement('div');
-            el.classList.add('item');
-
-            let x = (Math.random() - 0.5) * 2;
-            x = x * x * x; 
-            const finalX = x * 280;
-
-            const randomDepth = Math.random(); 
-            let finalY = (randomDepth * 150) - 20; 
-            finalY += Math.abs(finalX) * 0.4;
-            const rz = (Math.random() - 0.5) * 40;
-
-            el.style.setProperty('--tx', `${finalX}px`);
-            el.style.setProperty('--ty', `${finalY}px`);
-            el.style.setProperty('--rz', `${rz}deg`);
-
-            el.style.zIndex = Math.floor(100 + finalY);
-
-            if (isHistory) {
-                el.innerText = "❤️";
-                el.classList.add('landed');
-            } else {
-                el.innerText = emojiChar;
-                el.classList.add('flying');
-                
-                setTimeout(() => {
-                    el.innerText = "❤️";
-                    el.classList.add('poof');
-                }, 150);
-
-                el.addEventListener('animationend', (e) => {
-                   if (e.animationName === 'jump') {
-                        el.classList.remove('flying');
-                        el.classList.remove('poof');
-                        el.classList.add('landed');
-                   }
-                }, { once: true });
-            }
-            return el;
-        }
-
-        // --- DOM 직접 생성 함수 (과거 데이터 로드용) ---
-        function spawnItem(emojiChar, isHistory) {
-            if (activeElements.length >= MAX_ELEMENTS) {
-                const oldestEl = activeElements.shift();
-                if (oldestEl) oldestEl.remove();
-            }
-            const el = createItemElement(emojiChar, isHistory);
-            pileLayer.appendChild(el);
-            activeElements.push(el);
-        }
-
-        // --- ⚡ 1분간 1000개 발사 시뮬레이션 로직 (작동 보장) ---
-        let spawnCount = 0;
-        let spawnInterval = null;
-        const TOTAL_TO_SPAWN = 1000;
-        
-        function startSimulation() {
-            if (spawnInterval) return;
-
-            startTestBtn.disabled = true;
-            clearBtn.disabled = true;
-            spawnCount = 0;
-            const emojis = ["🔥", "✨", "🎁", "💎", "⭐️"];
-
-            const intervalFn = () => {
-                const numToSpawn = Math.round(TOTAL_TO_SPAWN / 60); 
-
-                for (let i = 0; i < numToSpawn && spawnCount < TOTAL_TO_SPAWN; i++) {
-                    const pick = emojis[Math.floor(Math.random() * emojis.length)];
-                    itemQueue.push({ emoji: pick, isHistory: false });
-                    spawnCount++;
-                }
-
-                if (!isProcessingQueue) {
-                    requestAnimationFrame(processQueue);
-                }
-
-                if (spawnCount >= TOTAL_TO_SPAWN) {
-                    clearInterval(spawnInterval);
-                    spawnInterval = null;
-                    startTestBtn.disabled = false;
-                    clearBtn.disabled = false;
-                    startTestBtn.innerText = "✅ 시뮬레이션 완료";
-                    setTimeout(() => {
-                        startTestBtn.innerText = "⚡ 1분간 1000개 발사 시뮬레이션";
-                    }, 3000);
-                }
-            };
-            
-            spawnInterval = setInterval(intervalFn, 1000); 
-            startTestBtn.innerText = "⏳ 발사 중...";
-        }
-
-        // 🌟 버튼 이벤트 리스너는 항상 등록되어 실행되도록 보장 🌟
-        startTestBtn.addEventListener('click', startSimulation);
-
-        // --- 🗑️ 모두 지우기 로직 ---
-        clearBtn.addEventListener('click', () => {
-            if (spawnInterval) {
-                 clearInterval(spawnInterval);
-                 spawnInterval = null;
-            }
-            pileLayer.innerHTML = ''; 
-            activeElements = [];
-            itemQueue = [];
-            isProcessingQueue = false;
-            spawnCount = 0;
-            counterElement.innerText = `0/${MAX_ELEMENTS}`;
-            startTestBtn.disabled = false;
-            startTestBtn.innerText = "⚡ 1분간 1000개 발사 시뮬레이션";
-            clearBtn.disabled = false;
-        });
-
-        // 초기 카운터 설정
-        counterElement.innerText = `0/${MAX_ELEMENTS}`;
-    </script>
 </body>
 </html>
