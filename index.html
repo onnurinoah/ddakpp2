@@ -15,6 +15,7 @@
             align-items: center;
             height: 100vh;
             font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+            perspective: 1000px; /* 3D 원근감 추가 */
         }
 
         #game-container {
@@ -26,17 +27,19 @@
             position: relative;
             overflow: hidden;
             box-shadow: 0 0 100px rgba(0,0,0,0.8);
+            transform-style: preserve-3d;
         }
 
         /* 보물상자 */
         #chest-container {
             position: absolute;
-            bottom: 10%; /* 바닥에 쌓일 공간 확보를 위해 조금 올림 */
+            bottom: 12%; /* 바닥에서 살짝 띄움 */
             left: 50%;
             transform: translateX(-50%);
             width: 30%;
-            z-index: 20; /* 쌓인 하트들보다 앞에 오도록 */
-            filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.4));
+            z-index: 20; 
+            /* 상자 자체도 살짝 빛나게 */
+            filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.3));
         }
 
         #chest-container img {
@@ -44,64 +47,88 @@
             display: block;
         }
 
-        /* 튀어오르는 이모지/하트 공통 스타일 */
+        /* 날아가는 아이템 공통 스타일 */
         .flying-item {
             position: absolute;
             left: 50%; 
-            bottom: 20%; /* 상자 내부 시작점 */
-            font-size: 4rem; /* 크기를 15rem -> 4rem으로 축소 */
-            z-index: 10; /* 상자 뒤에서 나와서 바닥에 깔림 */
+            bottom: 25%; /* 상자 입구 안쪽에서 시작 */
+            font-size: 3.5rem; /* 크기 적당히 유지 */
+            z-index: 15; /* 상자보다는 뒤, 쌓인 것보다는 앞 */
             user-select: none;
             pointer-events: none;
             will-change: transform, opacity;
             
+            /* 3D 텍스트 효과 (두께감 표현) */
+            text-shadow: 
+                0px 1px 0px #990000,
+                0px 2px 0px #990000,
+                0px 3px 0px #990000,
+                0px 4px 5px rgba(0,0,0,0.5);
+            
             /* CSS 변수로 랜덤 도착 지점 제어 */
             --end-x: 0px; 
             --end-y: 0px;
-            --rotate-end: 0deg;
+            --rotate-x: 0deg;
+            --rotate-y: 0deg;
+            --rotate-z: 0deg;
 
-            /* 애니메이션: 1.5초 동안 튀어올라 바닥에 안착 */
-            animation: jumpAndFall 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            /* 애니메이션: 짧고 굵게 튀어오름 */
+            animation: jumpAndStack 1.2s cubic-bezier(0.19, 1, 0.22, 1) forwards;
         }
 
         /* 변신할 때 '펑' 하는 효과 */
         .poof-effect {
-            animation: poofScale 0.3s ease-out forwards;
+            animation: poofFlash 0.4s ease-out;
         }
 
-        /* 이미 바닥에 떨어진 하트 (애니메이션 종료 후 클래스) */
+        /* 바닥에 쌓인 상태 (애니메이션 종료 후) */
         .landed {
             position: absolute;
-            z-index: 5; /* 상자보다 뒤, 배경보다 앞 */
-            animation: none; /* 애니메이션 멈춤 */
-            transform: translate(var(--end-x), var(--end-y)) rotate(var(--rotate-end));
-            /* 바닥에 있는 하트는 은은하게 두근거림 */
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+            /* 상자 바로 앞~위쪽에 쌓이도록 z-index 조절이 필요할 수 있음 */
+            z-index: 25; 
+            animation: none; 
+            
+            /* 최종 위치에 고정 + 입체적으로 눕히기 */
+            transform: 
+                translate3d(var(--end-x), var(--end-y), 0) 
+                rotateX(var(--rotate-x)) 
+                rotateY(var(--rotate-y)) 
+                rotateZ(var(--rotate-z));
+            
+            /* 쌓인 하트는 그림자를 더 진하게 */
+            filter: drop-shadow(0 10px 10px rgba(0,0,0,0.6));
+            transition: transform 0.2s; /* 쌓일 때 부드럽게 */
         }
 
-        /* 애니메이션 키프레임 */
-        @keyframes jumpAndFall {
+        /* 점프 애니메이션 */
+        @keyframes jumpAndStack {
             0% {
                 opacity: 0;
-                transform: translate(-50%, 0) scale(0.5);
+                transform: translate3d(-50%, 0, 0) scale(0.5);
             }
             10% {
                 opacity: 1;
+                transform: translate3d(-50%, -100px, 0) scale(1.1); /* 튀어나오는 순간 */
             }
-            50% {
-                /* 공중 가장 높은 곳 (위로 솟구침) */
-                transform: translate(-50%, -300px) scale(1.2);
+            40% {
+                /* 공중 정점 (더 높이) */
+                transform: translate3d(-50%, -350px, 50px) scale(1.3);
             }
             100% {
-                /* 바닥 랜덤 위치로 낙하 */
-                transform: translate(var(--end-x), var(--end-y)) rotate(var(--rotate-end)) scale(1);
+                /* 지정된 좌표로 낙하 (3D 회전 적용) */
+                transform: 
+                    translate3d(var(--end-x), var(--end-y), 0) 
+                    rotateX(var(--rotate-x)) 
+                    rotateY(var(--rotate-y)) 
+                    rotateZ(var(--rotate-z)) 
+                    scale(1);
             }
         }
 
-        /* 변신 시 순간적으로 커졌다 작아지는 효과 */
-        @keyframes poofScale {
-            0% { filter: brightness(2); transform: scale(1.5); }
-            50% { filter: brightness(1.5); transform: scale(0.8); }
+        /* 이모지 -> 하트 변신 시 번쩍임 */
+        @keyframes poofFlash {
+            0% { filter: brightness(3) contrast(2); transform: scale(1.4); }
+            50% { filter: brightness(2); transform: scale(1.2); }
             100% { filter: brightness(1); transform: scale(1); }
         }
 
@@ -110,11 +137,10 @@
 <body>
 
     <div id="game-container">
-        <div id="pile-container"></div>
-
         <div id="chest-container">
             <img src="./chest_3d.png" alt="Treasure Chest" id="chest-img">
         </div>
+        <div id="pile-container"></div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -125,7 +151,9 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         const chestContainer = document.getElementById('chest-container');
-        const pileContainer = document.getElementById('pile-container'); // 하트가 쌓일 곳
+        
+        // 중요: 하트가 쌓일 기준점은 상자 컨테이너 내부가 아니라 상자와 같은 레벨이어야 자연스러움
+        // 하지만 좌표 계산 편의를 위해 chestContainer에 넣고 위치를 조정합니다.
         
         let inputListener = null;
         const startTime = Date.now();
@@ -135,12 +163,7 @@
             inputListener = inputRef.on('child_added', (snapshot) => {
                 const data = snapshot.val();
                 if (data.timestamp && data.timestamp > startTime) {
-                    
-                    // Firebase에서 받은 텍스트(이모지) 추출
-                    // 예: data.text, data.message, data.emoji 등 실제 필드명에 맞게 수정 필요
-                    // 여기서는 안전하게 여러 필드를 확인하고 없으면 기본값 사용
-                    const receivedEmoji = data.emoji || data.text || data.message || "❓";
-
+                    const receivedEmoji = data.emoji || data.text || "❓";
                     spawnEmojiToHeart(receivedEmoji);
                 }
             });
@@ -149,64 +172,58 @@
         startListening();
 
         function spawnEmojiToHeart(emojiChar) {
-            // 1. 요소 생성
             const item = document.createElement('div');
             item.classList.add('flying-item');
-            item.innerText = emojiChar; // 처음엔 받은 이모지로 시작
+            item.innerText = emojiChar; 
 
-            // 2. 랜덤 도착 위치 계산 (상자 주변 바닥에 쌓이도록)
-            // x: -200px ~ 200px (상자 중심 기준 좌우)
-            // y: 50px ~ 150px (상자 바닥 근처)
-            const randomX = (Math.random() * 500) - 250; 
-            const randomY = (Math.random() * 100) + 20; 
-            const randomRotate = (Math.random() * 60) - 30;
+            // --- 좌표 설정 (상자 위에 수북이 쌓이게) ---
+            
+            // X: 상자 너비보다 약간 좁게 (-15% ~ 15% 정도 범위)
+            // 화면 픽셀 기준으로 대략 -150px ~ 150px
+            const randomX = (Math.random() * 300) - 150; 
+            
+            // Y: 상자 입구 ~ 바닥 사이 (0px ~ 150px 아래로)
+            // 값이 클수록 아래로 내려갑니다. 상자 입구가 0 기준.
+            // 더 입체적으로 쌓이게 하기 위해 랜덤 분포
+            const randomY = (Math.random() * 120) - 20; 
 
-            // CSS 변수에 랜덤 값 주입
+            // 3D 회전 (바닥에 흩뿌려진 느낌)
+            // RotateX: 40~70도 (누워있는 각도)
+            const rotateX = 40 + (Math.random() * 30);
+            const rotateY = (Math.random() * 40) - 20;
+            const rotateZ = (Math.random() * 60) - 30;
+
             item.style.setProperty('--end-x', `${randomX}px`);
             item.style.setProperty('--end-y', `${randomY}px`);
-            item.style.setProperty('--rotate-end', `${randomRotate}deg`);
+            item.style.setProperty('--rotate-x', `${rotateX}deg`);
+            item.style.setProperty('--rotate-y', `${rotateY}deg`);
+            item.style.setProperty('--rotate-z', `${rotateZ}deg`);
 
-            // 상자 안에 추가 (초기 위치 잡기 위함)
             chestContainer.appendChild(item);
 
-            // 3. 변신 로직 (타이밍 조절)
-            // 애니메이션 전체가 1.5초이고, 50% 지점(0.75초)이 가장 높은 곳(Top)입니다.
-            // 공중에 떴을 때 하트로 바꿉니다.
+            // --- 변신 로직 (타이밍 단축) ---
+            // 0.2초(200ms) 만에 바로 변신 (튀어오르는 도중)
             setTimeout(() => {
-                // 텍스트 변경
                 item.innerText = "❤️";
-                
-                // 펑 터지는 효과 클래스 추가 (반짝임 등)
                 item.classList.add('poof-effect');
-                
-                // 부드러운 전환을 위해 기존 transform 스타일 덮어쓰지 않도록 주의
-                // (CSS animation이 transform을 제어 중이므로 텍스트만 바꿔도 됨)
-            }, 750); // 0.75초 (애니메이션 중간 지점)
+            }, 200); 
 
-            // 4. 애니메이션 종료 후 처리 (쌓이기)
+            // --- 애니메이션 종료 후 처리 ---
             item.addEventListener('animationend', () => {
-                // 애니메이션 클래스 제거 (충돌 방지)
                 item.classList.remove('flying-item');
                 item.classList.remove('poof-effect');
-                
-                // "바닥에 떨어진 상태" 클래스 추가
                 item.classList.add('landed');
 
-                // 중요: 현재 상자(chestContainer) 안에 있으면 상자가 움직일 때 같이 움직일 수 있으므로,
-                // 바깥의 고정된 배경 컨테이너(pileContainer)나 game-container로 옮겨줍니다.
-                // 다만, 위치 계산이 복잡해질 수 있으므로, 여기서는 
-                // chestContainer 내부에서 position을 고정하거나,
-                // 시각적으로 문제없다면 그대로 둡니다.
-                
-                // 더 자연스러운 쌓임을 위해 z-index를 랜덤하게 주어 
-                // 어떤 건 앞에, 어떤 건 뒤에 쌓이게 함
-                item.style.zIndex = Math.floor(Math.random() * 10);
+                // 입체감을 위해 쌓인 순서대로 z-index 미세 조정 + 랜덤성
+                // 상자 앞쪽으로 흘러내린 것(Y값이 큰 것)이 더 앞에 와야 함
+                const depthZ = Math.floor(randomY) + 30; 
+                item.style.zIndex = depthZ;
             });
         }
-        
-        // 테스트용: 화면 클릭 시 랜덤 이모지로 테스트 가능
+
+        // --- 테스트 클릭 이벤트 ---
         document.body.addEventListener('click', () => {
-             const randomEmojis = ["🦁", "🐯", "😀", "🔥", "💎", "👻"];
+             const randomEmojis = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊"];
              const pick = randomEmojis[Math.floor(Math.random() * randomEmojis.length)];
              spawnEmojiToHeart(pick);
         });
